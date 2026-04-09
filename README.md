@@ -171,3 +171,15 @@ Premium Version: [https://github.com/donatso/family-chart-premium](https://githu
 [product-wiki-tree-screenshot]: https://github.com/user-attachments/assets/4e2dc169-4b43-46f3-b31c-db17f4d489da
 [create-tree-screenshot]: https://github.com/user-attachments/assets/ce5c4b33-48dd-441c-aa2f-f581b57ddcb7
 
+
+## Vercel PR Preview Deployments
+
+This repository includes a GitHub Actions workflow at `.github/workflows/vercel-preview.yml` that deploys a preview build to Vercel on every pull request update.
+
+To enable it, add these repository secrets:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+After setup, each PR will receive a comment with the live preview URL.
