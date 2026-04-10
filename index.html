@@ -3,12 +3,437 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>family-tree</title>
+  <title>Family Chart Sample</title>
+  <script src="https://unpkg.com/d3@7"></script>
+  <script type="module" src="https://unpkg.com/family-chart@latest"></script>
+  <link rel="stylesheet" href="https://unpkg.com/family-chart@latest/dist/styles/family-chart.css">
+  <style>
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top, #172554 0%, #0f172a 45%, #020617 100%);
+      color: #e2e8f0;
+    }
+
+    header {
+      max-width: 1280px;
+      margin: 1.5rem auto 0.75rem;
+      padding: 0 1rem;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.75rem;
+      font-weight: 800;
+    }
+
+    p {
+      margin: 0.4rem 0 0;
+      color: #94a3b8;
+      line-height: 1.35;
+      max-width: 95ch;
+    }
+
+    #FamilyChart {
+      width: 100%;
+      height: 74vh;
+      margin: 0;
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid #334155;
+      box-shadow: 0 16px 32px rgba(2, 6, 23, 0.45);
+      backdrop-filter: blur(2px);
+    }
+
+    .app-shell {
+      max-width: 1280px;
+      margin: 0 auto 1.5rem;
+      padding: 0 1rem;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .panel {
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid #334155;
+      padding: 0.9rem;
+    }
+
+    .panel h2 {
+      margin: 0 0 0.65rem;
+      font-size: 1rem;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    label {
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+    }
+
+    input, select, button {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 0.55rem 0.65rem;
+      font: inherit;
+    }
+
+    button {
+      border-color: #2563eb;
+      background: #1d4ed8;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: transparent;
+      border-color: #64748b;
+    }
+
+    .helper {
+      margin-top: 0.5rem;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+
+    #message {
+      min-height: 1.2rem;
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: #93c5fd;
+    }
+
+    @media (min-width: 980px) {
+      .app-shell {
+        grid-template-columns: minmax(290px, 360px) 1fr;
+        align-items: start;
+      }
+
+      #FamilyChart {
+        height: 84vh;
+      }
+    }
+  </style>
 </head>
 <body>
+<header>
+  <h1>Three Intermarried Extended Families (7 Generations)</h1>
+  <p>
+    The Hartwell, Navarro, and Okafor families each span seven generations. Their lines intermarry across
+    all three houses (Hartwell↔Navarro, Navarro↔Okafor, and Okafor↔Hartwell), while the timeline is staged so
+    only five generations overlap contemporaneously (G3–G7). This sample includes 46 total people with at least
+    12 members represented in each family.
+  </p>
+</header>
+<div class="app-shell">
+  <section class="panel">
+    <h2>Mobile-first data entry</h2>
+    <form id="addPersonForm" class="form-grid">
+      <label>First name
+        <input name="firstName" required />
+      </label>
+      <label>Last name
+        <input name="lastName" required />
+      </label>
+      <label>Gender
+        <select name="gender" required>
+          <option value="M">Male (M)</option>
+          <option value="F">Female (F)</option>
+        </select>
+      </label>
+      <label>Birthday / year
+        <input name="birthday" placeholder="e.g. 2001-02-19 or 2001" />
+      </label>
+      <label>Photo upload
+        <input name="avatarFile" type="file" accept="image/*" />
+      </label>
+      <label>Relationship type
+        <select name="relType" required>
+          <option value="" selected disabled>Select relationship mode</option>
+          <option value="none">None (standalone)</option>
+          <option value="parent">New person is parent of…</option>
+          <option value="child">New person is child of…</option>
+          <option value="spouse">New person is spouse of…</option>
+        </select>
+      </label>
+      <label>Connect to existing person
+        <select name="relTarget" id="relTargetSelect">
+          <option value="">No connection</option>
+        </select>
+      </label>
+      <button type="submit">Add person</button>
+      <button type="button" id="resetFormBtn" class="secondary">Reset form</button>
+      <button type="button" id="resetDataBtn" class="secondary">Reset saved data</button>
+    </form>
+    <div id="message"></div>
+    <p class="helper">
+      Photos are stored in-browser as data URLs for this demo and are embedded in the chart data as <code>avatar</code>.
+    </p>
+  </section>
 
-<script>
+  <div id="FamilyChart" class="f3"></div>
+</div>
+
+<script type="module">
+  const STORAGE_KEY = 'family-chart-demo-data-v1'
+  const seedData = [
+    { id: 'h1', data: { 'first name': 'Caleb', 'last name': 'Hartwell', birthday: '1828', role: 'Hartwell G1 Patriarch' }, rels: { spouses: ['h1s'], children: ['h2'] } },
+    { id: 'h1s', data: { 'first name': 'Eleanor', 'last name': 'Hartwell', birthday: '1831', role: 'Hartwell G1 Matriarch' }, rels: { spouses: ['h1'], children: ['h2'] } },
+    { id: 'h2', data: { 'first name': 'Samuel', 'last name': 'Hartwell', birthday: '1856', role: 'Hartwell G2' }, rels: { parents: ['h1', 'h1s'], spouses: ['h2s'], children: ['h3', 'h3b'] } },
+    { id: 'h2s', data: { 'first name': 'Agnes', 'last name': 'Hartwell', birthday: '1858', role: 'Hartwell G2 Spouse' }, rels: { spouses: ['h2'], children: ['h3', 'h3b'] } },
+    { id: 'h3', data: { 'first name': 'Jonah', 'last name': 'Hartwell', birthday: '1884', role: 'Hartwell G3' }, rels: { parents: ['h2', 'h2s'], spouses: ['h3s'], children: ['h4'] } },
+    { id: 'h3s', data: { 'first name': 'Ruth', 'last name': 'Hartwell', birthday: '1886', role: 'Hartwell G3 Spouse' }, rels: { spouses: ['h3'], children: ['h4'] } },
+    { id: 'h3b', data: { 'first name': 'Micah', 'last name': 'Hartwell', birthday: '1888', role: 'Hartwell G3 Cousin Branch' }, rels: { parents: ['h2', 'h2s'], spouses: ['h3bs'], children: ['h4c'] } },
+    { id: 'h3bs', data: { 'first name': 'Viola', 'last name': 'Hartwell', birthday: '1890', role: 'Hartwell G3 Cousin Spouse' }, rels: { spouses: ['h3b'], children: ['h4c'] } },
+    { id: 'h4', data: { 'first name': 'Lydia', 'last name': 'Hartwell', birthday: '1912', role: 'Hartwell G4 (marries Navarro G4)' }, rels: { parents: ['h3', 'h3s'], spouses: ['n4'], children: ['hn5'] } },
+    { id: 'h4c', data: { 'first name': 'Greta', 'last name': 'Hartwell', birthday: '1917', role: 'Hartwell G4 Cousin Branch' }, rels: { parents: ['h3b', 'h3bs'], spouses: ['h4cs'] } },
+    { id: 'h4cs', data: { 'first name': 'Paul', 'last name': 'Winters', birthday: '1916', role: 'Hartwell Cousin Spouse' }, rels: { spouses: ['h4c'] } },
+
+    { id: 'n1', data: { 'first name': 'Mateo', 'last name': 'Navarro', birthday: '1829', role: 'Navarro G1 Patriarch' }, rels: { spouses: ['n1s'], children: ['n2'] } },
+    { id: 'n1s', data: { 'first name': 'Ines', 'last name': 'Navarro', birthday: '1832', role: 'Navarro G1 Matriarch' }, rels: { spouses: ['n1'], children: ['n2'] } },
+    { id: 'n2', data: { 'first name': 'Rafael', 'last name': 'Navarro', birthday: '1857', role: 'Navarro G2' }, rels: { parents: ['n1', 'n1s'], spouses: ['n2s'], children: ['n3', 'n3b'] } },
+    { id: 'n2s', data: { 'first name': 'Teresa', 'last name': 'Navarro', birthday: '1860', role: 'Navarro G2 Spouse' }, rels: { spouses: ['n2'], children: ['n3', 'n3b'] } },
+    { id: 'n3', data: { 'first name': 'Elena', 'last name': 'Navarro', birthday: '1886', role: 'Navarro G3' }, rels: { parents: ['n2', 'n2s'], spouses: ['n3s'], children: ['n4', 'n4b'] } },
+    { id: 'n3s', data: { 'first name': 'Javier', 'last name': 'Navarro', birthday: '1884', role: 'Navarro G3 Spouse' }, rels: { spouses: ['n3'], children: ['n4', 'n4b'] } },
+    { id: 'n3b', data: { 'first name': 'Silvia', 'last name': 'Navarro', birthday: '1889', role: 'Navarro G3 Cousin Branch' }, rels: { parents: ['n2', 'n2s'], spouses: ['n3bs'], children: ['n4c'] } },
+    { id: 'n3bs', data: { 'first name': 'Rene', 'last name': 'Alonso', birthday: '1887', role: 'Navarro Cousin Spouse' }, rels: { spouses: ['n3b'], children: ['n4c'] } },
+    { id: 'n4', data: { 'first name': 'Tomas', 'last name': 'Navarro', birthday: '1910', role: 'Navarro G4 (marries Hartwell G4)' }, rels: { parents: ['n3', 'n3s'], spouses: ['h4'], children: ['hn5'] } },
+    { id: 'n4b', data: { 'first name': 'Marisol', 'last name': 'Navarro', birthday: '1914', role: 'Navarro G4 Cousin Branch' }, rels: { parents: ['n3', 'n3s'], spouses: ['n4bs'], children: ['n5b'] } },
+    { id: 'n4bs', data: { 'first name': 'Diego', 'last name': 'Mora', birthday: '1913', role: 'Navarro Cousin Spouse' }, rels: { spouses: ['n4b'], children: ['n5b'] } },
+    { id: 'n4c', data: { 'first name': 'Pilar', 'last name': 'Navarro', birthday: '1918', role: 'Navarro G4 Second Cousin Branch' }, rels: { parents: ['n3b', 'n3bs'], spouses: ['n4cs'] } },
+    { id: 'n4cs', data: { 'first name': 'Carlos', 'last name': 'Vega', birthday: '1916', role: 'Navarro Second Cousin Spouse' }, rels: { spouses: ['n4c'] } },
+
+    { id: 'o1', data: { 'first name': 'Chinedu', 'last name': 'Okafor', birthday: '1830', role: 'Okafor G1 Patriarch' }, rels: { spouses: ['o1s'], children: ['o2'] } },
+    { id: 'o1s', data: { 'first name': 'Adaeze', 'last name': 'Okafor', birthday: '1834', role: 'Okafor G1 Matriarch' }, rels: { spouses: ['o1'], children: ['o2'] } },
+    { id: 'o2', data: { 'first name': 'Kelechi', 'last name': 'Okafor', birthday: '1859', role: 'Okafor G2' }, rels: { parents: ['o1', 'o1s'], spouses: ['o2s'], children: ['o3', 'o3b'] } },
+    { id: 'o2s', data: { 'first name': 'Nkechi', 'last name': 'Okafor', birthday: '1861', role: 'Okafor G2 Spouse' }, rels: { spouses: ['o2'], children: ['o3', 'o3b'] } },
+    { id: 'o3', data: { 'first name': 'Obinna', 'last name': 'Okafor', birthday: '1888', role: 'Okafor G3' }, rels: { parents: ['o2', 'o2s'], spouses: ['o3s'], children: ['o4'] } },
+    { id: 'o3s', data: { 'first name': 'Bisi', 'last name': 'Okafor', birthday: '1889', role: 'Okafor G3 Spouse' }, rels: { spouses: ['o3'], children: ['o4'] } },
+    { id: 'o3b', data: { 'first name': 'Amaka', 'last name': 'Okafor', birthday: '1891', role: 'Okafor G3 Cousin Branch' }, rels: { parents: ['o2', 'o2s'], spouses: ['o3bs'], children: ['o4c'] } },
+    { id: 'o3bs', data: { 'first name': 'Femi', 'last name': 'Balogun', birthday: '1889', role: 'Okafor Cousin Spouse' }, rels: { spouses: ['o3b'], children: ['o4c'] } },
+    { id: 'o4', data: { 'first name': 'Ife', 'last name': 'Okafor', birthday: '1915', role: 'Okafor G4' }, rels: { parents: ['o3', 'o3s'], spouses: ['o4s'], children: ['o5', 'o5b'] } },
+    { id: 'o4s', data: { 'first name': 'Kunle', 'last name': 'Adewale', birthday: '1913', role: 'Okafor G4 Spouse' }, rels: { spouses: ['o4'], children: ['o5', 'o5b'] } },
+    { id: 'o4c', data: { 'first name': 'Zara', 'last name': 'Okafor', birthday: '1919', role: 'Okafor G4 Second Cousin Branch' }, rels: { parents: ['o3b', 'o3bs'], spouses: ['o4cs'] } },
+    { id: 'o4cs', data: { 'first name': 'Bayo', 'last name': 'Lawal', birthday: '1918', role: 'Okafor Second Cousin Spouse' }, rels: { spouses: ['o4c'] } },
+
+    { id: 'hn5', data: { 'first name': 'Celia', 'last name': 'Hartwell-Navarro', birthday: '1938', role: 'Shared G5 (Hartwell + Navarro)' }, rels: { parents: ['h4', 'n4'], spouses: ['o5'], children: ['hno6'] } },
+    { id: 'o5', data: { 'first name': 'Emeka', 'last name': 'Okafor', birthday: '1939', role: 'Okafor G5 (marries shared H/N G5)' }, rels: { parents: ['o4', 'o4s'], spouses: ['hn5'], children: ['hno6'] } },
+
+    { id: 'n5b', data: { 'first name': 'Lucia', 'last name': 'Navarro-Mora', birthday: '1942', role: 'Navarro G5 Cousin Branch' }, rels: { parents: ['n4b', 'n4bs'], spouses: ['o5b'], children: ['no6'] } },
+    { id: 'o5b', data: { 'first name': 'Tunde', 'last name': 'Okafor', birthday: '1941', role: 'Okafor G5 Cousin Branch' }, rels: { parents: ['o4', 'o4s'], spouses: ['n5b'], children: ['no6'] } },
+
+    { id: 'hno6', data: { 'first name': 'Mara', 'last name': 'Okafor-Hartwell-Navarro', birthday: '1968', role: 'Shared G6 (all three families)' }, rels: { parents: ['hn5', 'o5'], spouses: ['h6p'], children: ['h7'] } },
+    { id: 'h6p', data: { 'first name': 'Adrian', 'last name': 'Hartwell', birthday: '1969', role: 'Hartwell G6 Branch' }, rels: { spouses: ['hno6'], children: ['h7'] } },
+    { id: 'no6', data: { 'first name': 'Sofia', 'last name': 'Navarro-Okafor', birthday: '1970', role: 'Shared G6 (Navarro + Okafor)' }, rels: { parents: ['n5b', 'o5b'], spouses: ['no6p'], children: ['n7'] } },
+    { id: 'no6p', data: { 'first name': 'Jonas', 'last name': 'Hartwell', birthday: '1967', role: 'Hartwell G6 Branch (marries N/O G6)' }, rels: { spouses: ['no6'], children: ['n7'] } },
+
+    { id: 'h7', data: { 'first name': 'Leona', 'last name': 'Hartwell-Okafor-Navarro', birthday: '1997', role: 'Generation 7 Anchor (all three families)' }, rels: { parents: ['hno6', 'h6p'], spouses: ['n7'] } },
+    { id: 'n7', data: { 'first name': 'Mateo', 'last name': 'Navarro-Hartwell', birthday: '1998', role: 'Generation 7 Anchor (Navarro + Hartwell)' }, rels: { parents: ['no6', 'no6p'], spouses: ['h7'] } },
+
+  ]
+
+  let data = loadData()
+
+  let chart
+  let idCounter = 1
+
+  const addForm = document.getElementById('addPersonForm')
+  const resetFormBtn = document.getElementById('resetFormBtn')
+  const resetDataBtn = document.getElementById('resetDataBtn')
+  const relTargetSelect = document.getElementById('relTargetSelect')
+  const message = document.getElementById('message')
+
+  function loadData() {
+    try {
+      const persisted = localStorage.getItem(STORAGE_KEY)
+      if (!persisted) return JSON.parse(JSON.stringify(seedData))
+      const parsed = JSON.parse(persisted)
+      if (!Array.isArray(parsed) || parsed.length === 0) return JSON.parse(JSON.stringify(seedData))
+      return parsed
+    } catch (_err) {
+      return JSON.parse(JSON.stringify(seedData))
+    }
+  }
+
+  function saveData() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result || ''))
+      reader.onerror = () => reject(new Error('Unable to read selected image file.'))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  function ensureRelArray(person, relKey) {
+    if (!person.rels[relKey]) person.rels[relKey] = []
+  }
+
+  function addUniqueRel(person, relKey, relId) {
+    ensureRelArray(person, relKey)
+    if (!person.rels[relKey].includes(relId)) person.rels[relKey].push(relId)
+  }
+
+  function getLabel(person) {
+    return `${person.data['first name']} ${person.data['last name']} (${person.id})`
+  }
+
+  function syncTargetOptions() {
+    relTargetSelect.innerHTML = '<option value=\"\">No connection</option>'
+    data.forEach(person => {
+      const option = document.createElement('option')
+      option.value = person.id
+      option.textContent = getLabel(person)
+      relTargetSelect.appendChild(option)
+    })
+  }
+
+  function renderChart() {
+    document.getElementById('FamilyChart').innerHTML = ''
+    chart = f3.createChart('#FamilyChart', data)
+      .setTransitionTime(700)
+      .setCardXSpacing(270)
+      .setCardYSpacing(185)
+
+    chart.setCardHtml()
+      .setCardDisplay([
+        ['first name', 'last name'],
+        ['role'],
+        ['birthday']
+      ])
+
+    chart.updateTree({ initial: true })
+  }
+
+  function createPersonId() {
+    let id = `p${Date.now()}-${idCounter++}`
+    while (data.some(person => person.id === id)) {
+      id = `p${Date.now()}-${idCounter++}`
+    }
+    return id
+  }
+
+  function setMessage(text) {
+    message.textContent = text
+  }
+
+  addForm.addEventListener('submit', async event => {
+    event.preventDefault()
+    const formData = new FormData(addForm)
+    const firstName = String(formData.get('firstName') || '').trim()
+    const lastName = String(formData.get('lastName') || '').trim()
+    const gender = String(formData.get('gender') || 'M')
+    const birthday = String(formData.get('birthday') || '').trim()
+    const avatarFile = formData.get('avatarFile')
+    const relType = String(formData.get('relType') || '')
+    const relTarget = String(formData.get('relTarget') || '')
+
+    if (!firstName || !lastName) {
+      setMessage('First and last name are required.')
+      return
+    }
+
+    if (!relType) {
+      setMessage('Please select a relationship mode before adding.')
+      return
+    }
+
+    if (relType !== 'none' && !relTarget) {
+      setMessage('Choose an existing person to connect this relationship.')
+      return
+    }
+
+    if (relType === 'none' && relTarget) {
+      setMessage('If you selected a person, choose parent/child/spouse instead of standalone.')
+      return
+    }
+
+    let avatar = ''
+    if (avatarFile && avatarFile instanceof File && avatarFile.size > 0) {
+      if (!avatarFile.type.startsWith('image/')) {
+        setMessage('Please upload a valid image file.')
+        return
+      }
+      try {
+        avatar = await fileToDataUrl(avatarFile)
+      } catch (_err) {
+        setMessage('Image upload failed. Please try another file.')
+        return
+      }
+    }
+
+    const newPerson = {
+      id: createPersonId(),
+      data: {
+        'first name': firstName,
+        'last name': lastName,
+        birthday,
+        gender,
+        avatar,
+        role: 'Added from mobile form'
+      },
+      rels: {}
+    }
+
+    const target = data.find(person => person.id === relTarget)
+    if (relType !== 'none' && relTarget && !target) {
+      setMessage('Selected relationship target could not be found.')
+      return
+    }
+
+    if (target && relType === 'parent') {
+      if ((target.rels.parents || []).length >= 2) {
+        setMessage(`${getLabel(target)} already has two parents. Remove one before adding another.`)
+        return
+      }
+      addUniqueRel(newPerson, 'children', target.id)
+      addUniqueRel(target, 'parents', newPerson.id)
+    } else if (target && relType === 'child') {
+      addUniqueRel(newPerson, 'parents', target.id)
+      addUniqueRel(target, 'children', newPerson.id)
+    } else if (target && relType === 'spouse') {
+      addUniqueRel(newPerson, 'spouses', target.id)
+      addUniqueRel(target, 'spouses', newPerson.id)
+    }
+
+    data.push(newPerson)
+    saveData()
+    syncTargetOptions()
+    renderChart()
+    addForm.reset()
+    const relMessage = target && relType !== 'none' ? ` Linked as ${relType} of ${getLabel(target)}.` : ' Added as standalone.'
+    setMessage(`Added ${firstName} ${lastName} (${newPerson.id}).${relMessage}`)
+  })
+
+  resetFormBtn.addEventListener('click', () => {
+    addForm.reset()
+    setMessage('Form reset.')
+  })
+
+  resetDataBtn.addEventListener('click', () => {
+    data = JSON.parse(JSON.stringify(seedData))
+    saveData()
+    syncTargetOptions()
+    renderChart()
+    setMessage('Saved data reset to default sample.')
+  })
+
+  syncTargetOptions()
+  renderChart()
 </script>
-
 </body>
 </html>
