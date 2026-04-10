@@ -35,14 +35,94 @@
     }
 
     #FamilyChart {
-      width: min(1280px, 100vw - 2rem);
-      height: 82vh;
-      margin: 0 auto 1.5rem;
+      width: 100%;
+      height: 74vh;
+      margin: 0;
       border-radius: 14px;
       background: rgba(2, 6, 23, 0.72);
       border: 1px solid #334155;
       box-shadow: 0 16px 32px rgba(2, 6, 23, 0.45);
       backdrop-filter: blur(2px);
+    }
+
+    .app-shell {
+      max-width: 1280px;
+      margin: 0 auto 1.5rem;
+      padding: 0 1rem;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .panel {
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid #334155;
+      padding: 0.9rem;
+    }
+
+    .panel h2 {
+      margin: 0 0 0.65rem;
+      font-size: 1rem;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    label {
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+    }
+
+    input, select, button {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 0.55rem 0.65rem;
+      font: inherit;
+    }
+
+    button {
+      border-color: #2563eb;
+      background: #1d4ed8;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: transparent;
+      border-color: #64748b;
+    }
+
+    .helper {
+      margin-top: 0.5rem;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+
+    #message {
+      min-height: 1.2rem;
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: #93c5fd;
+    }
+
+    @media (min-width: 980px) {
+      .app-shell {
+        grid-template-columns: minmax(290px, 360px) 1fr;
+        align-items: start;
+      }
+
+      #FamilyChart {
+        height: 84vh;
+      }
     }
   </style>
 </head>
@@ -56,7 +136,50 @@
     12 members represented in each family.
   </p>
 </header>
-<div id="FamilyChart" class="f3"></div>
+<div class="app-shell">
+  <section class="panel">
+    <h2>Mobile-first data entry</h2>
+    <form id="addPersonForm" class="form-grid">
+      <label>First name
+        <input name="firstName" required />
+      </label>
+      <label>Last name
+        <input name="lastName" required />
+      </label>
+      <label>Gender
+        <select name="gender" required>
+          <option value="M">Male (M)</option>
+          <option value="F">Female (F)</option>
+        </select>
+      </label>
+      <label>Birthday / year
+        <input name="birthday" placeholder="e.g. 2001-02-19 or 2001" />
+      </label>
+      <label>Relationship type
+        <select name="relType">
+          <option value="none">None (standalone)</option>
+          <option value="parent">New person is parent of…</option>
+          <option value="child">New person is child of…</option>
+          <option value="spouse">New person is spouse of…</option>
+        </select>
+      </label>
+      <label>Connect to existing person
+        <select name="relTarget" id="relTargetSelect">
+          <option value="">No connection</option>
+        </select>
+      </label>
+      <button type="submit">Add person</button>
+      <button type="button" id="resetFormBtn" class="secondary">Reset form</button>
+    </form>
+    <div id="message"></div>
+    <p class="helper">
+      Photo uploads are intentionally disabled for now. This form captures names, gender,
+      birthdays, and relationships only.
+    </p>
+  </section>
+
+  <div id="FamilyChart" class="f3"></div>
+</div>
 
 <script type="module">
   const data = [
@@ -115,19 +238,124 @@
 
   ]
 
-  const chart = f3.createChart('#FamilyChart', data)
-    .setTransitionTime(700)
-    .setCardXSpacing(270)
-    .setCardYSpacing(185)
+  let chart
+  let idCounter = 1
 
-  chart.setCardHtml()
-    .setCardDisplay([
-      ['first name', 'last name'],
-      ['role'],
-      ['birthday']
-    ])
+  const addForm = document.getElementById('addPersonForm')
+  const resetFormBtn = document.getElementById('resetFormBtn')
+  const relTargetSelect = document.getElementById('relTargetSelect')
+  const message = document.getElementById('message')
 
-  chart.updateTree({ initial: true })
+  function ensureRelArray(person, relKey) {
+    if (!person.rels[relKey]) person.rels[relKey] = []
+  }
+
+  function addUniqueRel(person, relKey, relId) {
+    ensureRelArray(person, relKey)
+    if (!person.rels[relKey].includes(relId)) person.rels[relKey].push(relId)
+  }
+
+  function getLabel(person) {
+    return `${person.data['first name']} ${person.data['last name']} (${person.id})`
+  }
+
+  function syncTargetOptions() {
+    relTargetSelect.innerHTML = '<option value=\"\">No connection</option>'
+    data.forEach(person => {
+      const option = document.createElement('option')
+      option.value = person.id
+      option.textContent = getLabel(person)
+      relTargetSelect.appendChild(option)
+    })
+  }
+
+  function renderChart() {
+    document.getElementById('FamilyChart').innerHTML = ''
+    chart = f3.createChart('#FamilyChart', data)
+      .setTransitionTime(700)
+      .setCardXSpacing(270)
+      .setCardYSpacing(185)
+
+    chart.setCardHtml()
+      .setCardDisplay([
+        ['first name', 'last name'],
+        ['role'],
+        ['birthday']
+      ])
+
+    chart.updateTree({ initial: true })
+  }
+
+  function createPersonId() {
+    let id = `p${Date.now()}-${idCounter++}`
+    while (data.some(person => person.id === id)) {
+      id = `p${Date.now()}-${idCounter++}`
+    }
+    return id
+  }
+
+  function setMessage(text) {
+    message.textContent = text
+  }
+
+  addForm.addEventListener('submit', event => {
+    event.preventDefault()
+    const formData = new FormData(addForm)
+    const firstName = String(formData.get('firstName') || '').trim()
+    const lastName = String(formData.get('lastName') || '').trim()
+    const gender = String(formData.get('gender') || 'M')
+    const birthday = String(formData.get('birthday') || '').trim()
+    const relType = String(formData.get('relType') || 'none')
+    const relTarget = String(formData.get('relTarget') || '')
+
+    if (!firstName || !lastName) {
+      setMessage('First and last name are required.')
+      return
+    }
+
+    const newPerson = {
+      id: createPersonId(),
+      data: {
+        'first name': firstName,
+        'last name': lastName,
+        birthday,
+        gender,
+        role: 'Added from mobile form'
+      },
+      rels: {}
+    }
+
+    const target = data.find(person => person.id === relTarget)
+    if (relType !== 'none' && relTarget && !target) {
+      setMessage('Selected relationship target could not be found.')
+      return
+    }
+
+    if (target && relType === 'parent') {
+      addUniqueRel(newPerson, 'children', target.id)
+      addUniqueRel(target, 'parents', newPerson.id)
+    } else if (target && relType === 'child') {
+      addUniqueRel(newPerson, 'parents', target.id)
+      addUniqueRel(target, 'children', newPerson.id)
+    } else if (target && relType === 'spouse') {
+      addUniqueRel(newPerson, 'spouses', target.id)
+      addUniqueRel(target, 'spouses', newPerson.id)
+    }
+
+    data.push(newPerson)
+    syncTargetOptions()
+    renderChart()
+    addForm.reset()
+    setMessage(`Added ${firstName} ${lastName} (${newPerson.id}).`)
+  })
+
+  resetFormBtn.addEventListener('click', () => {
+    addForm.reset()
+    setMessage('Form reset.')
+  })
+
+  syncTargetOptions()
+  renderChart()
 </script>
 </body>
 </html>
